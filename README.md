@@ -91,6 +91,7 @@ Supported Platforms
 - Nintendo Switch
 - Wii
 - PlayStation Vita
+- Sega Dreamcast[<sup>[4]</sup>](#dcver)
 
 Other Unix-like platforms, such as OpenBSD, are known to work as well, but are untested and not fully supported.
 
@@ -218,6 +219,17 @@ Replace the `-DCMAKE_TOOLCHAIN_FILE` parameter for the following platforms:
 - Vita: `../src/platform/psp2/CMakeToolchain.vitasdk`
 - Wii: `../src/platform/wii/CMakeToolchain.txt`
 
+#### Dreamcast building
+
+The Dreamcast port uses [KallistiOS](http://dcemulation.org/kos/) (KOS) and its own `kos-cmake` wrapper rather than a plain `-DCMAKE_TOOLCHAIN_FILE`, and needs a number of feature flags turned off to fit the KOS/newlib environment. See [`docs/BUILDING.md`](docs/BUILDING.md) for the full configure/build commands and the reasoning behind each non-default flag. In short, once KOS is installed and sourced:
+
+	source /opt/toolchains/dc/kos/environ.sh
+	mkdir build-dc && cd build-dc
+	kos-cmake -S .. -B . [see docs/BUILDING.md for full flag list]
+	cmake --build . -j"$(nproc)"
+
+This produces `build-dc/sdl/mgba.elf`. This port is experimental[<sup>[4]</sup>](#dcver); see `NEXT_TASK.md` for current status.
+
 ### Dependencies
 
 mGBA has no hard dependencies, however, the following optional dependencies are required for specific features. The features will be disabled if the dependencies can't be found.
@@ -244,6 +256,8 @@ Footnotes
 <a name="flashdetect">[2]</a> Flash memory size detection does not work in some cases. These can be configured at runtime, but filing a bug is recommended if such a case is encountered.
 
 <a name="osxver">[3]</a> 10.9 is only needed for the Qt port. It may be possible to build or running the Qt port on 10.7 or older, but this is not officially supported. The SDL port is known to work on 10.5, and may work on older.
+
+<a name="dcver">[4]</a> The Dreamcast port is experimental. It builds and boots to ROM execution on real hardware (video, input, and audio initialized), but performance is not yet acceptable — see [`NEXT_TASK.md`](NEXT_TASK.md) for the current status and [`docs/BUILDING.md`](docs/BUILDING.md) for build instructions.
 
 [downloads]: http://mgba.io/downloads.html
 [source]: https://github.com/mgba-emu/mgba/
