@@ -182,6 +182,14 @@ int main(int argc, char** argv) {
 #ifdef __DREAMCAST__
 	printf("mgba-dc: calling mCoreFind(%s)\n", args.fname);
 	struct mCore* dbgcore = mCoreFind(args.fname);
+	if (!dbgcore && strcmp(args.fname, "/pc/roms/DangerousXmas.gba") == 0) {
+		/* dc-load-ip exposes the host mapping as /pc, while a Flycast or
+		 * burned-disc launch exposes the same staged files as /cd. */
+		printf("mgba-dc: /pc ROM unavailable, trying /cd/roms/DangerousXmas.gba\n");
+		free(args.fname);
+		args.fname = strdup("/cd/roms/DangerousXmas.gba");
+		dbgcore = mCoreFind(args.fname);
+	}
 	printf("mgba-dc: immediately on return, dbgcore=%p dbgcore->init=%p\n",
 		(void*)dbgcore, dbgcore ? (void*)dbgcore->init : NULL);
 	renderer.core = dbgcore;
