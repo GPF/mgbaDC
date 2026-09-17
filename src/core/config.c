@@ -271,7 +271,8 @@ void mCoreConfigDirectory(char* out, size_t outLength) {
 	 * a CD-only boot has no writable location for this at all, so mkdir()
 	 * failing there is expected and harmless (config save just no-ops).
 	 */
-	snprintf(out, outLength, "/pc/%s", projectName);
+	extern const char* _mDreamcastMediaRoot;
+	snprintf(out, outLength, "%s/%s", _mDreamcastMediaRoot, projectName);
 	mkdir(out, 0755);
 #else
 	char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
@@ -287,6 +288,16 @@ void mCoreConfigDirectory(char* out, size_t outLength) {
 	mkdir(out, 0755);
 #endif
 }
+
+#ifdef __DREAMCAST__
+const char* _mDreamcastMediaRoot = "/pc";
+
+void mCoreConfigSetDreamcastMediaRoot(const char* root) {
+	if (root && (strcmp(root, "/pc") == 0 || strcmp(root, "/cd") == 0)) {
+		_mDreamcastMediaRoot = root;
+	}
+}
+#endif
 
 void mCoreConfigPortablePath(char* out, size_t outLength) {
 #ifdef _WIN32

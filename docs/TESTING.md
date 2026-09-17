@@ -71,6 +71,14 @@ kos-tool -t 192.168.0.128 -x sdl/mgba.elf -m sdl/cd/
 Dreamcast controller bindings are A/B/X/Y/Start/C for GBA A/B/L/R/Start/Select,
 the D-pad for directions, and the left/right triggers for GBA L/R.
 
+The launcher tries `/pc/roms/DangerousXmas.gba` first for dc-load, then falls
+back to `/cd/roms/DangerousXmas.gba` for Flycast or a burned disc. Once the
+root is selected, BIOS, config, saves, patches, cheats, and savestates use the
+same `/pc` or `/cd` root.
+
+To build a CDI image from the staged files, run `build-dc/dc.sh` from the
+`build-dc/` directory. It writes `mGBADC.cdi` beside the script.
+
 Then poll `/tmp/kostool.log` and `ping`/`ps` as needed rather than blocking
 the shell on `kos-tool` directly — this keeps you able to run other
 diagnostic commands (checking console state, killing an orphaned process

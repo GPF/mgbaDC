@@ -58,6 +58,19 @@ static void _mSDLDreamcastExit(uint8_t addr, uint32_t buttons) {
 	UNUSED(buttons);
 	exit(EXIT_SUCCESS);
 }
+
+static void _mSDLDreamcastRemapPath(char** path, const char* root) {
+	if (!*path || strncmp(*path, "/pc/", 4) != 0 || strcmp(root, "/pc") == 0) {
+		return;
+	}
+	size_t suffixLength = strlen(*path) - 3;
+	char* remapped = malloc(strlen(root) + suffixLength + 1);
+	if (remapped) {
+		sprintf(remapped, "%s/%s", root, *path + 4);
+		free(*path);
+		*path = remapped;
+	}
+}
 #endif
 
 static struct mStandardLogger _logger;
@@ -180,14 +193,20 @@ int main(int argc, char** argv) {
 	}
 
 #ifdef __DREAMCAST__
+	mCoreConfigSetDreamcastMediaRoot("/pc");
 	printf("mgba-dc: calling mCoreFind(%s)\n", args.fname);
 	struct mCore* dbgcore = mCoreFind(args.fname);
 	if (!dbgcore && strcmp(args.fname, "/pc/roms/DangerousXmas.gba") == 0) {
 		/* dc-load-ip exposes the host mapping as /pc, while a Flycast or
 		 * burned-disc launch exposes the same staged files as /cd. */
 		printf("mgba-dc: /pc ROM unavailable, trying /cd/roms/DangerousXmas.gba\n");
+		mCoreConfigSetDreamcastMediaRoot("/cd");
 		free(args.fname);
 		args.fname = strdup("/cd/roms/DangerousXmas.gba");
+		_mSDLDreamcastRemapPath(&args.patch, "/cd");
+		_mSDLDreamcastRemapPath(&args.cheatsFile, "/cd");
+		_mSDLDreamcastRemapPath(&args.savestate, "/cd");
+		_mSDLDreamcastRemapPath(&args.bios, "/cd");
 		dbgcore = mCoreFind(args.fname);
 	}
 	printf("mgba-dc: immediately on return, dbgcore=%p dbgcore->init=%p\n",

@@ -75,6 +75,9 @@ void mCoreConfigMakePortable(const struct mCoreConfig*);
 void mCoreConfigDirectory(char* out, size_t outLength);
 void mCoreConfigPortablePath(char* out, size_t outLength);
 bool mCoreConfigIsPortable(void);
+#ifdef __DREAMCAST__
+void mCoreConfigSetDreamcastMediaRoot(const char* root);
+#endif
 #endif
 
 const char* mCoreConfigGetValue(const struct mCoreConfig*, const char* key);
