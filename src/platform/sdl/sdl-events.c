@@ -172,7 +172,30 @@ void mSDLInitBindingsGBA(struct mInputMap* inputMap) {
 	description = (struct mInputAxis) { GBA_KEY_DOWN, GBA_KEY_UP, 0x4000, -0x4000 };
 	mInputBindAxis(inputMap, SDL_BINDING_BUTTON, 1, &description);
 
+#ifdef __DREAMCAST__
+	/* The KOS SDL joystick backend exposes right/left triggers as axes 2/3.
+	 * Its raw values are high at rest and fall toward zero when pressed, so
+	 * bind only the low direction and leave the high direction unassigned. */
+	description = (struct mInputAxis) { -1, GBA_KEY_R, 30000, 10000 };
+	mInputBindAxis(inputMap, SDL_BINDING_BUTTON, 2, &description);
+	description = (struct mInputAxis) { -1, GBA_KEY_L, 30000, 10000 };
+	mInputBindAxis(inputMap, SDL_BINDING_BUTTON, 3, &description);
+#endif
+
 	mInputBindHat(inputMap, SDL_BINDING_BUTTON, 0, &GBAInputInfo.hat);
+
+#ifdef __DREAMCAST__
+	/* KOS SDL's Dreamcast joystick backend reports the Maple buttons in
+	 * this fixed order: C=0, B=1, A=2, Start=3, Z=4, Y=5, X=6, D=7.
+	 * The upstream SDL frontend does not provide joystick button defaults,
+	 * so without these bindings only the keyboard path works. */
+	mInputBindKey(inputMap, SDL_BINDING_BUTTON, 2, GBA_KEY_A);
+	mInputBindKey(inputMap, SDL_BINDING_BUTTON, 1, GBA_KEY_B);
+	mInputBindKey(inputMap, SDL_BINDING_BUTTON, 6, GBA_KEY_L);
+	mInputBindKey(inputMap, SDL_BINDING_BUTTON, 5, GBA_KEY_R);
+	mInputBindKey(inputMap, SDL_BINDING_BUTTON, 3, GBA_KEY_START);
+	mInputBindKey(inputMap, SDL_BINDING_BUTTON, 0, GBA_KEY_SELECT);
+#endif
 }
 
 bool mSDLAttachPlayer(struct mSDLEvents* events, struct mSDLPlayer* player) {

@@ -245,7 +245,7 @@ static THREAD_ENTRY _mCoreThreadRun(void* context) {
 	ThreadLocalSetKey(_contextKey, threadContext);
 	ThreadSetName("CPU Thread");
 
-#if !defined(_WIN32) && defined(USE_PTHREADS)
+#if !defined(_WIN32) && !defined(__DREAMCAST__) && defined(USE_PTHREADS)
 	sigset_t signals;
 	sigemptyset(&signals);
 	pthread_sigmask(SIG_SETMASK, &signals, 0);
@@ -476,7 +476,7 @@ bool mCoreThreadStart(struct mCoreThread* threadContext) {
 
 	threadContext->impl->interruptDepth = 0;
 
-#ifdef USE_PTHREADS
+#if defined(USE_PTHREADS) && !defined(__DREAMCAST__)
 	sigset_t signals;
 	sigemptyset(&signals);
 	sigaddset(&signals, SIGINT);

@@ -35,6 +35,24 @@
 #include <mgba-util/vfs.h>
 #include <errno.h>
 
+/* TEMP diagnostic: bisecting a hardware hang inside _GBACoreInit() (see
+ * platform/dreamcast/... launch notes) -- printf always fires so a plain
+ * launch shows progress in the kos-tool log; gdb_breakpoint() only under
+ * DREAMCAST_GDB so a `kos-tool -g` session can stop and inspect state at
+ * each point instead of guessing from an uncatchable hang. Remove once the
+ * hang is found. */
+#ifdef __DREAMCAST__
+#include <stdio.h>
+#ifdef DREAMCAST_GDB
+#include <arch/gdb.h>
+#define DC_CHECKPOINT(msg) do { printf("mgba-dc: %s\n", msg); gdb_breakpoint(); } while (0)
+#else
+#define DC_CHECKPOINT(msg) printf("mgba-dc: %s\n", msg)
+#endif
+#else
+#define DC_CHECKPOINT(msg) do {} while (0)
+#endif
+
 static const struct mCoreChannelInfo _GBAVideoLayers[] = {
 	{ GBA_LAYER_BG0, "bg0", "Background 0", NULL },
 	{ GBA_LAYER_BG1, "bg1", "Background 1", NULL },
@@ -186,6 +204,7 @@ struct GBACore {
 static bool _GBACoreInit(struct mCore* core) {
 	struct GBACore* gbacore = (struct GBACore*) core;
 
+	DC_CHECKPOINT("_GBACoreInit: allocating cpu/gba");
 	struct ARMCore* cpu = anonymousMemoryMap(sizeof(struct ARMCore));
 	struct GBA* gba = anonymousMemoryMap(sizeof(struct GBA));
 	if (!cpu || !gba) {
@@ -193,6 +212,7 @@ static bool _GBACoreInit(struct mCore* core) {
 		free(gba);
 		return false;
 	}
+	DC_CHECKPOINT("_GBACoreInit: cpu/gba allocated");
 	core->cpu = cpu;
 	core->board = gba;
 	core->timing = &gba->timing;
@@ -207,19 +227,25 @@ static bool _GBACoreInit(struct mCore* core) {
 #endif
 	gbacore->audioMixer = NULL;
 
+	DC_CHECKPOINT("_GBACoreInit: GBACreate");
 	GBACreate(gba);
+	DC_CHECKPOINT("_GBACoreInit: GBACreate done, ARMSetComponents");
 	// TODO: Restore cheats
 	memset(gbacore->components, 0, sizeof(gbacore->components));
 	ARMSetComponents(cpu, &gba->d, CPU_COMPONENT_MAX, gbacore->components);
+	DC_CHECKPOINT("_GBACoreInit: ARMSetComponents done, ARMInit");
 	ARMInit(cpu);
+	DC_CHECKPOINT("_GBACoreInit: ARMInit done (this runs GBAInit via component->init)");
 	mRTCGenericSourceInit(&core->rtc, core);
 	gba->rtcSource = &core->rtc.d;
+	DC_CHECKPOINT("_GBACoreInit: mRTCGenericSourceInit done, video renderer creates");
 
 	GBAVideoDummyRendererCreate(&gbacore->dummyRenderer);
 	GBAVideoAssociateRenderer(&gba->video, &gbacore->dummyRenderer);
 
 	GBAVideoSoftwareRendererCreate(&gbacore->renderer);
 	gbacore->renderer.outputBuffer = NULL;
+	DC_CHECKPOINT("_GBACoreInit: video renderer creates done");
 
 #ifdef BUILD_GLES3
 	GBAVideoGLRendererCreate(&gbacore->glRenderer);
@@ -227,7 +253,9 @@ static bool _GBACoreInit(struct mCore* core) {
 #endif
 
 #ifndef DISABLE_THREADING
+	DC_CHECKPOINT("_GBACoreInit: mVideoThreadProxyCreate");
 	mVideoThreadProxyCreate(&gbacore->threadProxy);
+	DC_CHECKPOINT("_GBACoreInit: mVideoThreadProxyCreate done");
 #endif
 #ifndef MINIMAL_CORE
 	gbacore->vlProxy.logger = NULL;
@@ -235,9 +263,12 @@ static bool _GBACoreInit(struct mCore* core) {
 #endif
 
 #if !defined(MINIMAL_CORE) || MINIMAL_CORE < 2
+	DC_CHECKPOINT("_GBACoreInit: mDirectorySetInit");
 	mDirectorySetInit(&core->dirs);
+	DC_CHECKPOINT("_GBACoreInit: mDirectorySetInit done");
 #endif
-	
+
+	DC_CHECKPOINT("_GBACoreInit: returning true");
 	return true;
 }
 
@@ -1370,11 +1401,23 @@ static void _GBACoreEndVideoLog(struct mCore* core) {
 struct mCore* GBACoreCreate(void) {
 	struct GBACore* gbacore = malloc(sizeof(*gbacore));
 	struct mCore* core = &gbacore->d;
+	DC_CHECKPOINT("GBACoreCreate: entered");
+#ifdef __DREAMCAST__
+	printf("mgba-dc: GBACoreCreate: gbacore=%p core(&gbacore->d)=%p sizeof(GBACore)=%u\n",
+		(void*)gbacore, (void*)core, (unsigned)sizeof(*gbacore));
+	printf("mgba-dc: layout PATH_MAX=%u sizeof(mCore)=%u init_offset=%u\n",
+		(unsigned)PATH_MAX, (unsigned)sizeof(struct mCore),
+		(unsigned)offsetof(struct mCore, init));
+#endif
 	memset(&core->opts, 0, sizeof(core->opts));
 	core->cpu = NULL;
 	core->board = NULL;
 	core->debugger = NULL;
 	core->init = _GBACoreInit;
+#ifdef __DREAMCAST__
+	printf("mgba-dc: GBACoreCreate: right after assignment, core->init=%p _GBACoreInit=%p\n",
+		(void*)core->init, (void*)_GBACoreInit);
+#endif
 	core->deinit = _GBACoreDeinit;
 	core->platform = _GBACorePlatform;
 	core->supportsFeature = _GBACoreSupportsFeature;
@@ -1455,6 +1498,10 @@ struct mCore* GBACoreCreate(void) {
 #ifndef MINIMAL_CORE
 	core->startVideoLog = _GBACoreStartVideoLog;
 	core->endVideoLog = _GBACoreEndVideoLog;
+#endif
+#ifdef __DREAMCAST__
+	printf("mgba-dc: GBACoreCreate: about to return, core=%p core->init=%p\n",
+		(void*)core, (void*)core->init);
 #endif
 	return core;
 }

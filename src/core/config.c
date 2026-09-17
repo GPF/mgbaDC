@@ -261,6 +261,18 @@ void mCoreConfigDirectory(char* out, size_t outLength) {
 	find_directory(B_USER_SETTINGS_DIRECTORY, 0, false, path, B_PATH_NAME_LENGTH);
 	snprintf(out, outLength, "%s/%s", path, binaryName);
 	mkdir(out, 0755);
+#elif defined(__DREAMCAST__)
+	/* No HOME/XDG_CONFIG_HOME on KOS -- the generic #else path below calls
+	 * getenv("HOME") (NULL here) straight into snprintf's %s and mkdir(),
+	 * which is exactly what crashed ("arch: aborting the system") before
+	 * SDL2 even initialized on first hardware launch. /pc/ is KOS's
+	 * dc-load-ip host-mounted directory (same convention gpSP's Dreamcast
+	 * port and this port's own dc_fs.c use for dev-workflow file access);
+	 * a CD-only boot has no writable location for this at all, so mkdir()
+	 * failing there is expected and harmless (config save just no-ops).
+	 */
+	snprintf(out, outLength, "/pc/%s", projectName);
+	mkdir(out, 0755);
 #else
 	char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
 	if (xdgConfigHome && xdgConfigHome[0] == '/') {
@@ -290,7 +302,7 @@ void mCoreConfigPortablePath(char* out, size_t outLength) {
 	}
 	WideCharToMultiByte(CP_UTF8, 0, wpath, -1, out, outLength, 0, 0);
 	StringCchCatA(out, outLength, PATH_SEP "portable.ini");
-#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__)
+#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__) || defined(__DREAMCAST__)
 	out[0] = '\0';
 #else
 	getcwd(out, outLength);

@@ -5,6 +5,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "main.h"
 
+#include <stdio.h>
+
 #include <mgba/internal/debugger/cli-debugger.h>
 
 #ifdef USE_GDB_STUB
@@ -37,11 +39,26 @@
 #include <errno.h>
 #include <signal.h>
 
+#ifdef __DREAMCAST__
+#include <arch/arch.h>
+#include <arch/gdb.h>
+#include <dc/maple.h>
+#include <dc/maple/controller.h>
+#endif
+
 #define PORT "sdl"
 
 static void mSDLDeinit(struct mSDLRenderer* renderer);
 
 static int mSDLRun(struct mSDLRenderer* renderer, struct mArguments* args);
+
+#ifdef __DREAMCAST__
+static void _mSDLDreamcastExit(uint8_t addr, uint32_t buttons) {
+	UNUSED(addr);
+	UNUSED(buttons);
+	exit(EXIT_SUCCESS);
+}
+#endif
 
 static struct mStandardLogger _logger;
 
@@ -55,12 +72,50 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
 	AttachConsole(ATTACH_PARENT_PROCESS);
 #endif
+#ifdef __DREAMCAST__
+	/* dc-load's console redirect goes through ordinary buffered stdio --
+	 * the DC_CHECKPOINT printf()s sprinkled through core->init() (gba/
+	 * core.c, gba/gba.c) were silently sitting in this buffer and never
+	 * appearing before a hang/crash, making every checkpoint before the
+	 * fault look like it never ran. Force unbuffered stdout so every
+	 * printf is visible immediately, before anything else in main(). */
+	setvbuf(stdout, NULL, _IONBF, 0);
+#endif
+#ifdef __DREAMCAST__
+#ifdef DREAMCAST_GDB
+	/* Routes SH-4 exceptions into kos-tool's GDB stub instead of KOS's
+	 * default abort handler, so a fault traps into a live backtrace
+	 * instead of just printing "arch: aborting the system" and dying.
+	 * NOT safe to leave compiled in for a normal (non -g) launch: with
+	 * this active, a fault waits forever for a GDB connection that isn't
+	 * there instead of dying or letting the controller exit-chord below
+	 * recover it -- confirmed on hardware, needed a physical reboot.
+	 * Only build with -DDREAMCAST_GDB when actually launching with
+	 * `kos-tool -g` to attach a debugger. */
+	gdb_init();
+#endif
+
+	/* No terminal on this target to Ctrl-C out of a hang -- a real
+	 * controller exit path is load-bearing, not optional. Register it
+	 * before anything else in main() so it's live even if init below
+	 * fails or hangs. */
+	cont_btn_callback(0,
+		CONT_START | CONT_A | CONT_B | CONT_X | CONT_Y,
+		_mSDLDreamcastExit);
+#endif
 	struct mSDLRenderer renderer = {0};
 
 	struct mCoreOptions opts = {
 		.useBios = true,
+#ifdef __DREAMCAST__
+		/* A 600-frame rewind ring is too large for the Dreamcast's 16 MiB
+		 * heap once the GBA core, SDL/PVR, thread, and audio are live. */
+		.rewindEnable = false,
+		.rewindBufferCapacity = 0,
+#else
 		.rewindEnable = true,
 		.rewindBufferCapacity = 600,
+#endif
 		.audioBuffers = 1024,
 		.videoSync = false,
 		.audioSync = true,
@@ -73,11 +128,40 @@ int main(int argc, char** argv) {
 
 	struct mSubParser subparser;
 
+#ifdef __DREAMCAST__
+	printf("mgba-dc: main entered, argc=%d argv0=%s\n", argc, argc > 0 && argv[0] ? argv[0] : "(null)");
+	printf("mgba-dc: layout PATH_MAX=%u sizeof(mCore)=%u init_offset=%u\n",
+		(unsigned)PATH_MAX, (unsigned)sizeof(struct mCore),
+		(unsigned)offsetof(struct mCore, init));
+	if (argc > 1) {
+		printf("mgba-dc: argv1=%s\n", argv[1] ? argv[1] : "(null)");
+	}
+#endif
+
 	mSubParserGraphicsInit(&subparser, &graphicsOpts);
 	bool parsed = mArgumentsParse(&args, argc, argv, &subparser, 1);
+#ifdef __DREAMCAST__
+	/* KOS's dc-load-ip loader does not actually forward argc/argv into
+	 * main() here (confirmed on hardware: argc==0 even when `kos-tool -x
+	 * ... -- <path>` reports sending them) -- there is no argv-based ROM
+	 * path on this platform, only /pc/ (host-mounted via kos-tool -m) and
+	 * /cd/ (burned disc), same as gpSP's Dreamcast port. Fall back to a
+	 * fixed path rather than falling through to usage()'s NULL argv[0]
+	 * dereference (the actual cause of the first hardware crash here).
+	 * TODO: replace with a directory scan once boot is otherwise proven;
+	 * hardcoded to match what's staged in cd/roms/ for now. */
+	if (!args.fname) {
+		free(args.fname);
+		args.fname = strdup("/pc/roms/DangerousXmas.gba");
+	}
+#endif
 	if (!args.fname && !args.showVersion) {
 		parsed = false;
 	}
+#ifdef __DREAMCAST__
+	printf("mgba-dc: parsed=%d fname=%s showVersion=%d showHelp=%d\n",
+		parsed, args.fname ? args.fname : "(null)", args.showVersion, args.showHelp);
+#endif
 	if (!parsed || args.showHelp) {
 		usage(argv[0], NULL, NULL, &subparser, 1);
 		mArgumentsDeinit(&args);
@@ -95,7 +179,17 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+#ifdef __DREAMCAST__
+	printf("mgba-dc: calling mCoreFind(%s)\n", args.fname);
+	struct mCore* dbgcore = mCoreFind(args.fname);
+	printf("mgba-dc: immediately on return, dbgcore=%p dbgcore->init=%p\n",
+		(void*)dbgcore, dbgcore ? (void*)dbgcore->init : NULL);
+	renderer.core = dbgcore;
+	printf("mgba-dc: after storing into renderer.core, renderer.core=%p init=%p\n",
+		(void*)renderer.core, renderer.core ? (void*)renderer.core->init : NULL);
+#else
 	renderer.core = mCoreFind(args.fname);
+#endif
 	if (!renderer.core) {
 		printf("Could not run game. Are you sure the file exists and is a compatible game?\n");
 		mArgumentsDeinit(&args);
@@ -106,6 +200,9 @@ int main(int argc, char** argv) {
 		mArgumentsDeinit(&args);
 		return 1;
 	}
+#ifdef __DREAMCAST__
+	printf("mgba-dc: core->init() OK\n");
+#endif
 
 	renderer.core->desiredVideoDimensions(renderer.core, &renderer.width, &renderer.height);
 	renderer.ratio = graphicsOpts.multiplier;
@@ -161,12 +258,18 @@ int main(int argc, char** argv) {
 		mSDLSWCreate(&renderer);
 	}
 
+#ifdef __DREAMCAST__
+	printf("mgba-dc: calling renderer.init() (window/renderer/texture create)\n");
+#endif
 	if (!renderer.init(&renderer)) {
 		mArgumentsDeinit(&args);
 		mCoreConfigDeinit(&renderer.core->config);
 		renderer.core->deinit(renderer.core);
 		return 1;
 	}
+#ifdef __DREAMCAST__
+	printf("mgba-dc: renderer.init() OK\n");
+#endif
 
 	renderer.player.bindings = &renderer.core->inputMap;
 	mSDLInitBindingsGBA(&renderer.core->inputMap);
@@ -226,11 +329,20 @@ int mSDLRun(struct mSDLRenderer* renderer, struct mArguments* args) {
 	struct mCoreThread thread = {
 		.core = renderer->core
 	};
+#ifdef __DREAMCAST__
+	printf("mgba-dc: calling mCoreLoadFile(%s)\n", args->fname);
+#endif
 	if (!mCoreLoadFile(renderer->core, args->fname)) {
 		return 1;
 	}
+#ifdef __DREAMCAST__
+	printf("mgba-dc: mCoreLoadFile OK, autoloading save/cheats\n");
+#endif
 	mCoreAutoloadSave(renderer->core);
 	mCoreAutoloadCheats(renderer->core);
+#ifdef __DREAMCAST__
+	printf("mgba-dc: autoload done, starting core thread\n");
+#endif
 #ifdef ENABLE_SCRIPTING
 	struct mScriptBridge* bridge = mScriptBridgeCreate();
 #ifdef ENABLE_PYTHON

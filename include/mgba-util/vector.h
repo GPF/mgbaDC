@@ -98,7 +98,7 @@ CXX_GUARD_START
 	} \
 
 DECLARE_VECTOR(StringList, char*);
-DECLARE_VECTOR(IntList, int);
+DECLARE_VECTOR(IntList, int32_t);
 
 CXX_GUARD_END
 

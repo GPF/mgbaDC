@@ -20,6 +20,16 @@
 
 CXX_GUARD_START
 
+#ifdef __DREAMCAST__
+/*
+ * KOS exposes PATH_MAX as 4096, but the SH-4 C library's networking
+ * headers later include sys/syslimits.h, which defines it as 1024.
+ * mCore embeds PATH_MAX-sized fields, so every translation unit must see
+ * the same definition before any platform header can change it.
+ */
+#include <sys/syslimits.h>
+#endif
+
 #include <assert.h>
 #include <ctype.h>
 #include <fcntl.h>

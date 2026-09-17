@@ -231,7 +231,15 @@ static void _vfdUnmap(struct VFile* vf, void* memory, size_t size) {
 
 static void _vfdTruncate(struct VFile* vf, size_t size) {
 	struct VFileFD* vfd = (struct VFileFD*) vf;
+#ifndef __DREAMCAST__
 	ftruncate(vfd->fd, size);
+#else
+	UNUSED(size);
+	/* KOS's newlib has no ftruncate(). mGBA's own save/config file paths
+	 * always write a full, correctly-sized file (O_TRUNC on create, or a
+	 * complete rewrite), so this platform never actually needs to shrink
+	 * a file in place. */
+#endif
 }
 
 static ssize_t _vfdSize(struct VFile* vf) {
@@ -266,7 +274,16 @@ static bool _vfdSync(struct VFile* vf, void* buffer, size_t size) {
 		}
 #endif
 	}
+#ifndef __DREAMCAST__
 	return fsync(vfd->fd) == 0;
+#else
+	/* KOS's newlib has no fsync(); its filesystem backends (fs_pc's host
+	 * connection, fs_ramdisk, etc.) have no OS-level write-back cache the
+	 * way Linux does, so the write() above (or the lseek/write pair when
+	 * buffer is set) is already the durable operation -- nothing left to
+	 * flush. */
+	return true;
+#endif
 #else
 	HANDLE h = (HANDLE) _get_osfhandle(vfd->fd);
 	FILETIME ft;

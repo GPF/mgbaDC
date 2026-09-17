@@ -461,7 +461,13 @@ int mInputClearAxis(const struct mInputMap* map, uint32_t type, int axis, int ke
 	if (!description) {
 		return keys;
 	}
-	return keys &= ~((1 << description->highDirection) | (1 << description->lowDirection));
+	if (description->highDirection >= 0) {
+		keys &= ~(1 << description->highDirection);
+	}
+	if (description->lowDirection >= 0) {
+		keys &= ~(1 << description->lowDirection);
+	}
+	return keys;
 }
 
 void mInputBindAxis(struct mInputMap* map, uint32_t type, int axis, const struct mInputAxis* description) {

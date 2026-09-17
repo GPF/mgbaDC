@@ -5,6 +5,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include <mgba/core/core.h>
 
+#ifdef __DREAMCAST__
+#include <stdio.h>
+#endif
+
 #include <mgba/core/cheats.h>
 #include <mgba/core/log.h>
 #include <mgba/core/serialize.h>
@@ -118,6 +122,10 @@ struct mCore* mCoreFind(const char* path) {
 			return NULL;
 		}
 		core = mCoreFindVF(vf);
+#ifdef __DREAMCAST__
+		printf("mgba-dc: mCoreFind: after mCoreFindVF, core=%p core->init=%p (pre vf->close)\n",
+			(void*)core, core ? (void*)core->init : NULL);
+#endif
 		vf->close(vf);
 	}
 	if (core) {

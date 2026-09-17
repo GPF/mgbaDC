@@ -784,7 +784,7 @@ bool mDebuggerEvaluateParseTree(struct mDebugger* debugger, struct ParseTree* tr
 	int nextBranch;
 	bool ok = true;
 	int32_t tmpVal = 0;
-	int32_t tmpSegment = -1;
+	int tmpSegment = -1;
 
 	IntListInit(&stack, 0);
 	while (ok) {

@@ -24,6 +24,21 @@
 #include <mgba-util/elf-read.h>
 #endif
 
+/* TEMP diagnostic: see the matching comment/macro in src/gba/core.c -- same
+ * hardware-hang bisection, duplicated locally since this is a different
+ * translation unit. Remove once the hang is found. */
+#ifdef __DREAMCAST__
+#include <stdio.h>
+#ifdef DREAMCAST_GDB
+#include <arch/gdb.h>
+#define DC_CHECKPOINT(msg) do { printf("mgba-dc: %s\n", msg); gdb_breakpoint(); } while (0)
+#else
+#define DC_CHECKPOINT(msg) printf("mgba-dc: %s\n", msg)
+#endif
+#else
+#define DC_CHECKPOINT(msg) do {} while (0)
+#endif
+
 #define GBA_IRQ_DELAY 7
 
 mLOG_DEFINE_CATEGORY(GBA, "GBA", "gba");
@@ -72,26 +87,40 @@ static void GBAInit(void* cpu, struct mCPUComponent* component) {
 	gba->sync = 0;
 
 	GBAInterruptHandlerInit(&gba->cpu->irqh);
+	DC_CHECKPOINT("GBAInit: GBAMemoryInit");
 	GBAMemoryInit(gba);
+	DC_CHECKPOINT("GBAInit: GBAMemoryInit done");
 
 	gba->memory.savedata.timing = &gba->timing;
 	gba->memory.savedata.vf = NULL;
 	gba->memory.savedata.realVf = NULL;
 	gba->memory.savedata.gpio = &gba->memory.hw;
+	DC_CHECKPOINT("GBAInit: GBASavedataInit");
 	GBASavedataInit(&gba->memory.savedata, NULL);
+	DC_CHECKPOINT("GBAInit: GBASavedataInit done");
 
 	gba->video.p = gba;
+	DC_CHECKPOINT("GBAInit: GBAVideoInit");
 	GBAVideoInit(&gba->video);
+	DC_CHECKPOINT("GBAInit: GBAVideoInit done");
 
 	gba->audio.p = gba;
+	DC_CHECKPOINT("GBAInit: GBAAudioInit");
 	GBAAudioInit(&gba->audio, GBA_AUDIO_SAMPLES);
+	DC_CHECKPOINT("GBAInit: GBAAudioInit done");
 
+	DC_CHECKPOINT("GBAInit: GBAIOInit");
 	GBAIOInit(gba);
+	DC_CHECKPOINT("GBAInit: GBAIOInit done");
 
 	gba->sio.p = gba;
+	DC_CHECKPOINT("GBAInit: GBASIOInit");
 	GBASIOInit(&gba->sio);
+	DC_CHECKPOINT("GBAInit: GBASIOInit done");
 
+	DC_CHECKPOINT("GBAInit: GBAHardwareInit");
 	GBAHardwareInit(&gba->memory.hw, NULL);
+	DC_CHECKPOINT("GBAInit: GBAHardwareInit done");
 
 	gba->keysActive = 0;
 	gba->keysLast = 0x400;
@@ -108,7 +137,9 @@ static void GBAInit(void* cpu, struct mCPUComponent* component) {
 	gba->keyCallback = NULL;
 	mCoreCallbacksListInit(&gba->coreCallbacks, 0);
 
+	DC_CHECKPOINT("GBAInit: GBAChecksum");
 	gba->biosChecksum = GBAChecksum(gba->memory.bios, SIZE_BIOS);
+	DC_CHECKPOINT("GBAInit: GBAChecksum done");
 
 	gba->idleOptimization = IDLE_LOOP_REMOVE;
 	gba->idleLoop = IDLE_LOOP_NONE;
@@ -129,6 +160,7 @@ static void GBAInit(void* cpu, struct mCPUComponent* component) {
 	gba->irqEvent.callback = _triggerIRQ;
 	gba->irqEvent.context = gba;
 	gba->irqEvent.priority = 0;
+	DC_CHECKPOINT("GBAInit: returning");
 }
 
 void GBAUnloadROM(struct GBA* gba) {

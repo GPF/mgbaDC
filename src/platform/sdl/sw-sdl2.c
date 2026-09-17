@@ -9,6 +9,10 @@
 #include <mgba/core/thread.h>
 #include <mgba/core/version.h>
 
+#ifdef __DREAMCAST__
+#include <string.h>
+#endif
+
 static bool mSDLSWInit(struct mSDLRenderer* renderer);
 static void mSDLSWRunloop(struct mSDLRenderer* renderer, void* user);
 static void mSDLSWDeinit(struct mSDLRenderer* renderer);
@@ -19,13 +23,37 @@ void mSDLSWCreate(struct mSDLRenderer* renderer) {
 	renderer->runloop = mSDLSWRunloop;
 }
 
+#ifdef __DREAMCAST__
+static int _findPVRRenderer(void) {
+	SDL_RendererInfo info;
+	int i;
+	for (i = 0; i < SDL_GetNumRenderDrivers(); ++i) {
+		if (SDL_GetRenderDriverInfo(i, &info) == 0 && info.name && !strcmp(info.name, "Dreamcast PVR")) {
+			return i;
+		}
+	}
+	return -1;
+}
+#endif
+
 bool mSDLSWInit(struct mSDLRenderer* renderer) {
 	unsigned width, height;
 	renderer->core->desiredVideoDimensions(renderer->core, &width, &height);
+	/* SDL_WINDOW_OPENGL asks SDL for a GL-backed window; KOS's Dreamcast SDL2
+	 * port only implements the "Dreamcast PVR" 2D render driver (no GL
+	 * context), same reasoning as cannonball's src/main/sdl2/rendersurface.cpp. */
+#ifdef __DREAMCAST__
+	renderer->window = SDL_CreateWindow(projectName, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, renderer->viewportWidth, renderer->viewportHeight, SDL_WINDOW_FULLSCREEN_DESKTOP * renderer->player.fullscreen);
+#else
 	renderer->window = SDL_CreateWindow(projectName, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, renderer->viewportWidth, renderer->viewportHeight, SDL_WINDOW_OPENGL | (SDL_WINDOW_FULLSCREEN_DESKTOP * renderer->player.fullscreen));
+#endif
 	SDL_GetWindowSize(renderer->window, &renderer->viewportWidth, &renderer->viewportHeight);
 	renderer->player.window = renderer->window;
+#ifdef __DREAMCAST__
+	renderer->sdlRenderer = SDL_CreateRenderer(renderer->window, _findPVRRenderer(), SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+#else
 	renderer->sdlRenderer = SDL_CreateRenderer(renderer->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+#endif
 #ifdef COLOR_16_BIT
 #ifdef COLOR_5_6_5
 	renderer->sdlTex = SDL_CreateTexture(renderer->sdlRenderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, width, height);

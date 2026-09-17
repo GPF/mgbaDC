@@ -232,6 +232,29 @@ elseif(UNIX)
 	list(APPEND CORE_VFS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/util/vfs/vfs-fd.c ${CMAKE_CURRENT_SOURCE_DIR}/src/util/vfs/vfs-dirent.c)
 	file(GLOB OS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/posix/*.c)
 	source_group("POSIX-specific code" FILES ${OS_SRC})
+elseif(CMAKE_SYSTEM_NAME MATCHES "^[Dd]ream[Cc]ast$")
+	# KallistiOS's newlib provides POSIX open()/opendir() (VFileOpenFD/
+	# VDirOpen's actual backend) but CMake's UNIX var is false for this
+	# custom CMAKE_SYSTEM_NAME, so the UNIX branch above never ran and this
+	# vfs backend silently went unbuilt (link-time "undefined reference to
+	# VFileOpenFD" etc). No sys/mman.h/mmap here, so use the same
+	# calloc-based DISABLE_ANON_MMAP fallback src/platform/posix/memory.c
+	# already has for other mmap-less targets, instead of the mmap path.
+	set(USE_PTHREADS ON)
+	# KOS has no pthread_create() in its base libc (it has its own native
+	# kthread_t/mutex_t/condvar_t API) -- pthreads only exist via the
+	# separate "libpthread" KOS port addon (kos/addons/lib/dreamcast/
+	# libpthread.a, a real implementation on top of the native API, not a
+	# stub). CMAKE_REQUIRED_LIBRARIES makes the upcoming
+	# find_function(pthread_create) probe (below, ~line 377) actually link
+	# against it instead of just libc; SDL2's own KOS port also links
+	# against libpthread, so this is required either way.
+	set(CMAKE_REQUIRED_LIBRARIES pthread)
+	list(APPEND OS_LIB pthread)
+	list(APPEND CORE_VFS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/util/vfs/vfs-fd.c ${CMAKE_CURRENT_SOURCE_DIR}/src/util/vfs/vfs-dirent.c)
+	set(OS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/posix/memory.c)
+	add_definitions(-DDISABLE_ANON_MMAP)
+	source_group("Dreamcast-specific code" FILES ${OS_SRC})
 endif()
 
 if(APPLE)

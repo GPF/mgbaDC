@@ -64,7 +64,28 @@ enum {
 	SIZE_PALETTE_RAM = 0x00000400,
 	SIZE_VRAM = 0x00018000,
 	SIZE_OAM = 0x00000400,
+#ifdef __DREAMCAST__
+	/* Real GBA cart space is 32MiB, but SIZE_CART0 also doubles as the ROM
+	 * buffer's allocation size (anonymousMemoryMap(SIZE_CART0) in gba.c) --
+	 * fine on desktop platforms where that's a lazily-committed mmap, but
+	 * DISABLE_ANON_MMAP routes it through calloc() here (KOS has no mmap),
+	 * making it a real, immediate 32MiB allocation. The Dreamcast has only
+	 * 16MiB of RAM total, so that calloc always fails, and nothing here
+	 * checks for it -- this is what caused the hard reboot on first
+	 * hardware launch (crash inside GBACoreInit -> GBACreate ->
+	 * GBALoadNull). 4MiB is enough for the staged DangerousXmas test ROM
+	 * and leaves the heap headroom needed by KOS/SDL2, the emulator thread,
+	 * and audio on a 16MiB console. Larger ROMs remain unsupported until
+	 * the Dreamcast port gains page-cache/on-demand mapping (gpSP has that
+	 * support in dc_pagecache.c).
+	 * SIZE_CART0 is also the address-wraparound mask throughout
+	 * gba/memory.c's ROM load/store macros (`address & (SIZE_CART0 - 1)`),
+	 * so this one constant correctly resizes and re-masks everywhere at
+	 * once. */
+	SIZE_CART0 = 0x00400000,
+#else
 	SIZE_CART0 = 0x02000000,
+#endif
 	SIZE_CART1 = 0x02000000,
 	SIZE_CART2 = 0x02000000,
 	SIZE_CART_SRAM = 0x00008000,
